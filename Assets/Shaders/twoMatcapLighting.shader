@@ -1,4 +1,4 @@
-﻿Shader "Custom/Two Matcap Lighting"
+Shader "Custom/Two Matcap Lighting"
 {
 	Properties
 	{
@@ -100,6 +100,7 @@
 				fixed4 lit = tex2D(_LitTex, vn*0.5 + 0.5);
 				fixed4 shadow = tex2D(_ShadowTex, vn*0.5 + 0.5);
 				fixed4 col = lerp(shadow, lit, lighting);
+				
 				//fixed4 col = lit;
 
 				// apply fog
