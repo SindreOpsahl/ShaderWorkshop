@@ -4,9 +4,25 @@
 	{
 		_Tint ("Tint", Color) = (1,1,1,1)
 		_MainTex ("Albedo", 2D) = "white" {}
+		[NoScaleOffset] _NormalMap ("Normal Map", 2D) = "bump" {}
+		_BumpScale ("Bump Scale", Float) = 1
+		[NoScaleOffset] _MetallicMap ("Metallic", 2D) = "white" {}
 		[Gamma] _Metallic ("Metallic", Range(0,1)) = 0
 		_Smoothness ("Smoothness", Range(0.01,1)) = 0.5
+		[NoScaleOffset] _OcclusionMap ("Occlusion", 2D) = "white" {}
+		_OcclusionStrength("Occlusion Strength", Range(0, 1)) = 1
+		[NoScaleOffset] _EmissionMap ("Emission", 2D) = "black" {}
+		_Emission ("Emission", Color) = (0, 0, 0)
+		_DetailTex ("Detail Albedo", 2D) = "gray" {}
+		[NoScaleOffset] _DetailNormalMap ("Detail Normals", 2D) = "bump" {}
+		_DetailBumpScale ("Detail Bump Scale", Float) = 1
+		[NoScaleOffset] _DetailMask ("Detail Mask", 2D) = "white" {}
 	}
+	
+	CGINCLUDE
+	#define BINORMAL_PER_FRAGMENT
+	ENDCG
+
 	SubShader
 	{
 		Pass
@@ -15,70 +31,72 @@
 
 			CGPROGRAM
 			#pragma target 3.0
+
+			#pragma multi_compile _ SHADOWS_SCREEN
+			#pragma multi_compile _ VERTEXLIGHT_ON
+			#pragma shader_feature _METALLIC_MAP
+			#pragma shader_feature _ _SMOOTHNESS_ALBEDO _SMOOTHNESS_METALLIC
+			#pragma shader_feature _NORMAL_MAP
+			#pragma shader_feature _OCCLUSION_MAP
+			#pragma shader_feature _EMISSION_MAP
+			#pragma shader_feature _DETAIL_MASK
+			#pragma shader_feature _DETAIL_ALBEDO_MAP
+			#pragma shader_feature _DETAIL_NORMAL_MAP
+
 			#pragma vertex MyVertexProgram
 			#pragma fragment MyFragmentProgram
-			#include "UnityPBSLighting.cginc"
 
-			float4 _Tint;
-			sampler2D _MainTex;
-			float4 _MainTex_ST;
-			float _Smoothness, _Metallic;
-
-			struct VertexData
-			{
-				float4 position : POSITION;
-				float3 normal : NORMAL;
-				float2 uv : TEXCOORD0;
-			};
+			#define FORWARD_BASE_PASS
 			
-			struct Interpolators 
-			{
-				float4 position : SV_POSITION;
-				float2 uv : TEXCOORD0;
-				float3 normal : TEXCOORD1;
-				float3 worldPos : TEXCOORD2;
-			};
+			#include "catlike_Lighting.cginc"
 
-			Interpolators MyVertexProgram(VertexData v) 
+			ENDCG
+		}
+
+		Pass
+		{
+			Tags {"LightMode" = "ForwardAdd"}
+			Blend One One
+			ZWrite Off
+
+			CGPROGRAM
+			#pragma target 3.0
+
+			#pragma multi_compile_fwdadd_fullshadows
+			#pragma shader_feature _METALLIC_MAP
+			#pragma shader_feature _ _SMOOTHNESS_ALBEDO _SMOOTHNESS_METALLIC
+			#pragma shader_feature _NORMAL_MAP
+			#pragma shader_feature _DETAIL_MASK
+			#pragma shader_feature _DETAIL_ALBEDO_MAP
+			#pragma shader_feature _DETAIL_NORMAL_MAP
+			
+			#pragma vertex MyVertexProgram
+			#pragma fragment MyFragmentProgram
+			
+			#include "catlike_Lighting.cginc"
+
+			ENDCG
+		}
+
+		Pass 
+		{
+			Tags 
 			{
-				Interpolators i;
-				i.position = mul(UNITY_MATRIX_MVP, v.position);
-				i.uv = TRANSFORM_TEX(v.uv, _MainTex);
-				i.normal = UnityObjectToWorldNormal(v.normal);
-				i.worldPos = mul(unity_ObjectToWorld, v.position);
-				return i;
+				"LightMode" = "ShadowCaster"
 			}
 
-			float4 MyFragmentProgram(Interpolators i) : SV_TARGET
-			{
-				i.normal = normalize(i.normal);
-				float3 lightDir = _WorldSpaceLightPos0.xyz;
-				float3 viewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
-				float3 halfVector = normalize(lightDir + viewDir);
+			CGPROGRAM
+			#pragma target 3.0
 
-				float3 lightColor = _LightColor0.rgb;
-				float3 albedo = tex2D(_MainTex, i.uv).rgb * _Tint.rgb;
-				float3 specularTint;
-				float oneMinusReflectivity;
-				albedo = DiffuseAndSpecularFromMetallic(albedo, _Metallic, specularTint, oneMinusReflectivity);
+			#pragma multi_compile_shadowcaster
 
-				UnityLight light;
-				light.color = lightColor;
-				light.dir = lightDir;
-				light.ndotl = DotClamped(i.normal, lightDir);
-				UnityIndirect indirectLight;
-				indirectLight.diffuse = 0;
-				indirectLight.specular = 0;
+			#pragma vertex MyShadowVertexProgram
+			#pragma fragment MyShadowFragmentProgram
 
-				return UNITY_BRDF_PBS
-				(
-					albedo, specularTint,
-					oneMinusReflectivity, _Smoothness,
-					i.normal, viewDir,
-					light, indirectLight
-				);
-			}
+			#include "catlike_Shadows.cginc"
+
 			ENDCG
 		}	
 	}
+	CustomEditor "CatlikeShaderGUI"
 }
