@@ -7,7 +7,7 @@
 sampler2D _MainTex, _NormalMap, _DetailTex, _DetailNormalMap, _DetailMask,
 			_MetallicMap, _EmissionMap, _OcclusionMap;
 float4 _MainTex_ST, _DetailTex_ST;
-float _Smoothness, _Metallic, _BumpScale, _DetailBumpScale, _OcclusionStrength;
+float _Smoothness, _Metallic, _BumpScale, _DetailBumpScale, _OcclusionStrength, _AlphaCutoff;
 float3 _Emission;
 float4 _Tint;
 
@@ -58,6 +58,15 @@ float3 GetAlbedo (Interpolators i)
 		albedo = lerp(albedo, albedo * details, GetDetailMask(i));
 	#endif
 	return albedo;
+}
+
+float GetAlpha (Interpolators i) 
+{
+	float alpha = _Tint.a;
+	#if !defined(_SMOOTHNESS_ALBEDO)
+		alpha *= tex2D(_MainTex, i.uv.xy).a;
+	#endif
+	return alpha;
 }
 
 float3 GetTangentSpaceNormal (Interpolators i)
@@ -279,6 +288,11 @@ float4 MyFragmentProgram(Interpolators i) : SV_TARGET
 	float3 viewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
 	float3 specularTint;
 	float oneMinusReflectivity;
+	float alpha = GetAlpha(i);
+
+	#if defined(_RENDERING_CUTOUT)
+		clip(alpha - _AlphaCutoff);
+	#endif
 
 	float3 albedo = DiffuseAndSpecularFromMetallic(
 		GetAlbedo(i),
@@ -298,6 +312,9 @@ float4 MyFragmentProgram(Interpolators i) : SV_TARGET
 		CreateIndirectLight(i, viewDir)
 	);
 	color.rgb += GetEmission(i);
+	#if defined(_RENDERING_FADE)
+		color.a = alpha;
+	#endif
 	return color;
 }
 #endif
